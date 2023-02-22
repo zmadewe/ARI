@@ -1,0 +1,73 @@
+
+model {
+    for (i in 1:N_obs_per_year)
+    {
+        for (j in 1:N_year)
+        {
+			n_pos[i,j] ~ dbin(prev[i,j], n_test[i,j]) 
+			prev[i,j] <- odds[i,j]/(1+odds[i,j])*U[i,j] + 0.00001
+			U[i,j] ~ dbern(p[virus_nested_in_month[i]]) 
+			
+            odds[i,j] <- RR[i,j]*(rate_pred[i,j]/(1-rate_pred[i,j]))
+			RR[i,j] <- exp(phi[i,j] - 0.5 * COV.phi[i,i])
+        }
+    }
+	
+    for (i in 1:N_virus) 
+    {
+        p[i] ~ dbeta(1,1)
+    }
+    
+    phi[1:N_obs_per_year,1] ~ dmnorm(rep(0, N_obs_per_year), COV.phi.inv)   
+    for (j in 2:N_year) 
+    {
+        phi[1:N_obs_per_year,j] ~ dmnorm(smooth.phi[virus_nested_in_month]*phi[1:N_obs_per_year,j-1], COV.phi.inv) 
+    }
+    
+    for (i in 1:N_virus)
+    {
+        smooth.phi[i]~dunif(0,1) 
+    }
+    
+    for (i in 1:N_month) {
+        for (j in 1:N_month) {
+            for (k in 1:N_virus) {
+                for (l in 1:N_virus) {
+                    COV.phi.inv[(i-1)*N_virus+k,(j-1)*N_virus+l]<-OMEGA[i,j]*LAMBDA[k,l]
+                }
+            }
+        }
+    }
+    COV.phi <- inverse(COV.phi.inv) 
+	
+    OMEGA <- D.month-(lambda.month*W.month)
+    
+    for (i in 1:N_virus) 
+    {
+        sigma.inv[i]~dgamma(1,1)
+    }
+	sigma <- 1/sigma.inv
+    SIGMA[1,1]<-sigma[1]
+    for (i in 2:N_virus){
+        SIGMA[i,i]<-sigma[i]
+        for (j in 1:(i-1)){
+            SIGMA[j,i]<-0
+            SIGMA[i,j]<-0
+        }
+    }
+	
+    GAMMA[1,1]<-1
+    for (i in 2:N_virus){
+        GAMMA[i,i]<-1
+        for (j in 1:(i-1)){
+            GAMMA[i,j]<- rho 
+            GAMMA[j,i]<- 0
+        }
+    }
+    rho ~ dnorm(0,1)T(-3.0,3.0) 
+	
+    LAMBDA.inv<-SIGMA %*% GAMMA %*% t(GAMMA) %*% SIGMA 
+	
+    LAMBDA <- inverse(LAMBDA.inv) 
+    
+}
